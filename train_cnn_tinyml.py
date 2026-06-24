@@ -3,11 +3,12 @@ Lightweight 1D CNN for Human Activity Recognition (TinyML/RISC-V Optimized)
 Designed for resource-constrained microcontrollers with minimal memory footprint.
 
 Optimizations:
-  - Reduced filter counts: 32 -> 64 (instead of 64 -> 128 -> 256)
-  - Only 2 conv blocks (sufficient for UCI HAR)
-  - Smaller dense layer (32 units)
+  - 3 conv blocks: 32 -> 64 -> 128 filters
+  - Dense layer: 64 units
   - GlobalAveragePooling for parameter efficiency
-  - Keras Functional API for TFLite compatibility
+  - Quantization-Aware Training (QAT) for INT8 resilience
+  - Time-series data augmentation (jitter + permutation)
+  - Label smoothing (0.1) for better generalization
 """
 
 import numpy as np
@@ -31,69 +32,67 @@ ACTIVITY_LABELS = {
 }
 
 
-def build_cnn_tinyml(input_shape, num_classes, filters=(32, 64), dense_units=32):
+def augment_timeseries(X, jitter_std=0.02, permute_segments=4):
+    """Time-series data augmentation: jitter + segment permutation."""
+    X_aug = X.copy()
+    # Jitter: add small random noise
+    X_aug += np.random.normal(0, jitter_std, X_aug.shape).astype(np.float32)
+    # Permutation: randomly shuffle temporal segments
+    n_timesteps = X_aug.shape[1]
+    seg_len = n_timesteps // permute_segments
+    for i in range(len(X_aug)):
+        if np.random.random() > 0.5:  # 50% chance
+            segs = [X_aug[i, j*seg_len:(j+1)*seg_len, :] for j in range(permute_segments)]
+            np.random.shuffle(segs)
+            X_aug[i, :seg_len*permute_segments, :] = np.concatenate(segs, axis=0)
+    return X_aug
+
+
+def build_cnn_tinyml(input_shape, num_classes, filters=(32, 64, 128), dense_units=64):
     """
-    Build lightweight 1D CNN model for HAR optimized for TinyML/RISC-V.
+    Build improved 1D CNN model for HAR optimized for TinyML/RISC-V.
     
     Architecture:
     1. Input Layer
     2. Conv Block 1: Conv1D(32) -> BN -> ReLU -> MaxPool
     3. Conv Block 2: Conv1D(64) -> BN -> ReLU -> MaxPool
-    4. GlobalAveragePooling1D (parameter-efficient)
-    5. Dense(32) -> Dropout -> Softmax
-    
-    Args:
-        input_shape: Tuple of (n_timesteps, n_features)
-        num_classes: Number of output classes
-        filters: Tuple of filter counts for each conv block
-        dense_units: Number of units in hidden dense layer
-        
-    Returns:
-        Keras Model
+    4. Conv Block 3: Conv1D(128) -> BN -> ReLU -> MaxPool
+    5. GlobalAveragePooling1D (parameter-efficient)
+    6. Dense(64) -> Dropout -> Softmax
     """
     
-    # ========== INPUT LAYER ==========
     inputs = Input(shape=input_shape, name='input')
     
     # ========== CONV BLOCK 1 ==========
-    x = Conv1D(
-        filters=filters[0],
-        kernel_size=5,
-        padding='same',
-        name='conv1d_1'
-    )(inputs)
+    x = Conv1D(filters=filters[0], kernel_size=5, padding='same', name='conv1d_1')(inputs)
     x = BatchNormalization(name='bn_1')(x)
     x = ReLU(name='relu_1')(x)
     x = MaxPooling1D(pool_size=2, name='maxpool_1')(x)
     x = Dropout(0.2, name='dropout_1')(x)
     
     # ========== CONV BLOCK 2 ==========
-    x = Conv1D(
-        filters=filters[1],
-        kernel_size=5,
-        padding='same',
-        name='conv1d_2'
-    )(x)
+    x = Conv1D(filters=filters[1], kernel_size=5, padding='same', name='conv1d_2')(x)
     x = BatchNormalization(name='bn_2')(x)
     x = ReLU(name='relu_2')(x)
     x = MaxPooling1D(pool_size=2, name='maxpool_2')(x)
     x = Dropout(0.2, name='dropout_2')(x)
     
+    # ========== CONV BLOCK 3 (NEW) ==========
+    x = Conv1D(filters=filters[2], kernel_size=3, padding='same', name='conv1d_3')(x)
+    x = BatchNormalization(name='bn_3')(x)
+    x = ReLU(name='relu_3')(x)
+    x = MaxPooling1D(pool_size=2, name='maxpool_3')(x)
+    x = Dropout(0.2, name='dropout_3')(x)
+    
     # ========== GLOBAL POOLING ==========
-    # GlobalAveragePooling drastically reduces parameters
-    # Input: (batch, timesteps/4, 64) -> Output: (batch, 64)
     x = GlobalAveragePooling1D(name='global_avg_pool')(x)
     
     # ========== CLASSIFICATION HEAD ==========
     x = Dense(dense_units, activation='relu', name='dense_1')(x)
     x = Dropout(0.3, name='dropout_dense')(x)
-    
-    # Output layer
     outputs = Dense(num_classes, activation='softmax', name='output')(x)
     
-    # Create model
-    model = Model(inputs=inputs, outputs=outputs, name='CNN_TinyML')
-    
+    model = Model(inputs=inputs, outputs=outputs, name='CNN_TinyML_v2')
     return model
 
 
@@ -165,12 +164,12 @@ def load_data():
 
 
 def train_model(model, X_train, y_train, X_test, y_test, epochs=50, batch_size=64):
-    """Train the model"""
+    """Train the model with label smoothing and data augmentation."""
     
-    # Compile model
+    # Compile with label smoothing for better generalization
     model.compile(
         optimizer=keras.optimizers.Adam(learning_rate=0.001),
-        loss='categorical_crossentropy',
+        loss=keras.losses.CategoricalCrossentropy(label_smoothing=0.1),
         metrics=['accuracy']
     )
     
@@ -178,14 +177,14 @@ def train_model(model, X_train, y_train, X_test, y_test, epochs=50, batch_size=6
     callbacks = [
         keras.callbacks.EarlyStopping(
             monitor='val_accuracy',
-            patience=15,
+            patience=20,
             restore_best_weights=True,
             verbose=1
         ),
         keras.callbacks.ReduceLROnPlateau(
             monitor='val_loss',
             factor=0.5,
-            patience=5,
+            patience=7,
             min_lr=1e-6,
             verbose=1
         ),
@@ -197,12 +196,22 @@ def train_model(model, X_train, y_train, X_test, y_test, epochs=50, batch_size=6
         )
     ]
     
-    # Ensure models directory exists
     os.makedirs('models', exist_ok=True)
     
-    # Train
+    # Augment training data (2x dataset with jitter + permutation)
+    print("Augmenting training data...")
+    X_train_aug = augment_timeseries(X_train)
+    X_combined = np.concatenate([X_train, X_train_aug], axis=0)
+    y_combined = np.concatenate([y_train, y_train], axis=0)
+    
+    # Shuffle combined dataset
+    perm = np.random.permutation(len(X_combined))
+    X_combined = X_combined[perm]
+    y_combined = y_combined[perm]
+    print(f"Training samples: {len(X_train)} -> {len(X_combined)} (with augmentation)")
+    
     history = model.fit(
-        X_train, y_train,
+        X_combined, y_combined,
         validation_data=(X_test, y_test),
         epochs=epochs,
         batch_size=batch_size,
@@ -268,7 +277,7 @@ def test_single_prediction(model, X_test, y_test, sample_idx=0):
     print(f"True Activity:      {ACTIVITY_LABELS[true_label]}")
     print(f"Predicted Activity: {ACTIVITY_LABELS[pred_label]}")
     print(f"Confidence:         {confidence:.2f}%")
-    print(f"Match:              {'✓ CORRECT' if pred_label == true_label else '✗ INCORRECT'}")
+    print(f"Match:              {'YES' if pred_label == true_label else 'NO'}")
     
     print("\nAll class probabilities:")
     for i, prob in enumerate(prediction[0]):
@@ -278,8 +287,42 @@ def test_single_prediction(model, X_test, y_test, sample_idx=0):
     return pred_label == true_label
 
 
+def apply_qat(model, X_train, y_train, X_test, y_test, epochs=10):
+    """Apply Quantization-Aware Training (QAT) fine-tuning."""
+    try:
+        import tensorflow_model_optimization as tfmot
+        print("\n" + "=" * 60)
+        print("Applying Quantization-Aware Training (QAT)...")
+        print("=" * 60)
+        
+        # Annotate model for QAT
+        qat_model = tfmot.quantization.keras.quantize_model(model)
+        
+        qat_model.compile(
+            optimizer=keras.optimizers.Adam(learning_rate=1e-4),
+            loss=keras.losses.CategoricalCrossentropy(label_smoothing=0.1),
+            metrics=['accuracy']
+        )
+        
+        qat_model.fit(
+            X_train, y_train,
+            validation_data=(X_test, y_test),
+            epochs=epochs,
+            batch_size=64,
+            verbose=1
+        )
+        
+        loss, acc = qat_model.evaluate(X_test, y_test, verbose=0)
+        print(f"QAT Model Accuracy: {acc*100:.2f}%")
+        return qat_model
+    except ImportError:
+        print("WARNING: tensorflow-model-optimization not installed.")
+        print("Skipping QAT. Install with: pip install tensorflow-model-optimization")
+        return model
+
+
 def convert_to_tflite(model, X_train, model_name='har_cnn_tinyml'):
-    """Convert model to TFLite formats (float32 and int8)"""
+    """Convert model to TFLite formats (float32 and int8) with 500 calibration samples."""
     
     print("\n" + "=" * 60)
     print("Converting to TensorFlow Lite...")
@@ -296,18 +339,22 @@ def convert_to_tflite(model, X_train, model_name='har_cnn_tinyml'):
         with open(tflite_path, 'wb') as f:
             f.write(tflite_model)
         results['float32'] = len(tflite_model) / 1024
-        print(f"✓ TFLite (float32): {tflite_path} ({results['float32']:.2f} KB)")
+        print(f"TFLite (float32): {tflite_path} ({results['float32']:.2f} KB)")
     except Exception as e:
-        print(f"✗ TFLite float32 conversion failed: {e}")
+        print(f"TFLite float32 conversion failed: {e}")
     
-    # Int8 Quantized TFLite
+    # Int8 Quantized TFLite (500 calibration samples)
     try:
         converter_int8 = tf.lite.TFLiteConverter.from_keras_model(model)
         converter_int8.optimizations = [tf.lite.Optimize.DEFAULT]
         
-        # Representative dataset for quantization calibration
+        # Use 500 calibration samples (up from 100) for better quantization
+        cal_samples = min(500, len(X_train))
+        print(f"Using {cal_samples} calibration samples for INT8 quantization")
+        
         def representative_dataset():
-            for i in range(min(100, len(X_train))):
+            indices = np.random.permutation(len(X_train))[:cal_samples]
+            for i in indices:
                 yield [X_train[i:i+1]]
         
         converter_int8.representative_dataset = representative_dataset
@@ -320,9 +367,9 @@ def convert_to_tflite(model, X_train, model_name='har_cnn_tinyml'):
         with open(tflite_int8_path, 'wb') as f:
             f.write(tflite_int8_model)
         results['int8'] = len(tflite_int8_model) / 1024
-        print(f"✓ TFLite (int8):    {tflite_int8_path} ({results['int8']:.2f} KB)")
+        print(f"TFLite (int8):    {tflite_int8_path} ({results['int8']:.2f} KB)")
     except Exception as e:
-        print(f"✗ TFLite int8 conversion failed: {e}")
+        print(f"TFLite int8 conversion failed: {e}")
     
     return results
 
@@ -330,7 +377,7 @@ def convert_to_tflite(model, X_train, model_name='har_cnn_tinyml'):
 def main():
     # Check GPU availability
     print("=" * 60)
-    print("Lightweight 1D CNN for HAR (TinyML/RISC-V Optimized)")
+    print("Improved 1D CNN for HAR (TinyML/RISC-V Optimized v2)")
     print("=" * 60)
     print(f"TensorFlow version: {tf.__version__}")
     gpus = tf.config.list_physical_devices('GPU')
@@ -356,12 +403,12 @@ def main():
     print(f"Number of classes: {num_classes}")
     
     # Build model
-    print("\nBuilding Lightweight CNN model...")
+    print("\nBuilding Improved CNN model (v2)...")
     model = build_cnn_tinyml(
         input_shape=input_shape,
         num_classes=num_classes,
-        filters=(32, 64),      # Reduced from (64, 128, 256)
-        dense_units=32         # Reduced from 128
+        filters=(32, 64, 128),  # 3 conv blocks
+        dense_units=64          # Increased from 32
     )
     model.summary()
     
@@ -380,26 +427,21 @@ def main():
     print("=" * 60)
     
     # Architecture summary
-    print("\nArchitecture Summary:")
+    print("\nArchitecture Summary (v2):")
     print("=" * 60)
-    print("  Layer              Filters   Output Shape")
-    print("  " + "-" * 50)
-    print(f"  Input              -         {input_shape}")
-    print(f"  Conv1D + BN + ReLU 32        ({input_shape[0]}, 32)")
-    print(f"  MaxPool1D          -         ({input_shape[0]//2}, 32)")
-    print(f"  Conv1D + BN + ReLU 64        ({input_shape[0]//2}, 64)")
-    print(f"  MaxPool1D          -         ({input_shape[0]//4}, 64)")
-    print(f"  GlobalAvgPool1D    -         (64,)")
-    print(f"  Dense + Dropout    32        (32,)")
-    print(f"  Output (Softmax)   {num_classes}         ({num_classes},)")
+    print("  Conv Block 1: Conv1D(32, k=5) -> BN -> ReLU -> MaxPool")
+    print("  Conv Block 2: Conv1D(64, k=5) -> BN -> ReLU -> MaxPool")
+    print("  Conv Block 3: Conv1D(128, k=3) -> BN -> ReLU -> MaxPool")
+    print("  GlobalAvgPool -> Dense(64) -> Dropout -> Softmax(6)")
     print("=" * 60)
     
-    print("\nOptimizations Applied:")
-    print("  ✓ Reduced filters: 64->128->256 → 32->64")
-    print("  ✓ Only 2 conv blocks (sufficient for HAR)")
-    print("  ✓ GlobalAveragePooling (eliminates flatten overhead)")
-    print("  ✓ Small dense layer: 128 → 32 units")
-    print("  ✓ Kernel size 5 (good temporal receptive field)")
+    print("\nImprovements over v1:")
+    print("  + 3rd conv block (128 filters, k=3)")
+    print("  + Dense layer: 32 -> 64 units")
+    print("  + Label smoothing (0.1)")
+    print("  + Data augmentation (jitter + permutation)")
+    print("  + QAT fine-tuning for INT8 resilience")
+    print("  + 500 calibration samples (was 100)")
     print("=" * 60)
     
     # Train
@@ -435,8 +477,11 @@ def main():
     model.save(model_path)
     print(f"\nKeras model saved to: {model_path}")
     
-    # Convert to TFLite
-    tflite_sizes = convert_to_tflite(model, X_train, 'har_cnn_tinyml')
+    # Apply QAT fine-tuning before TFLite conversion
+    qat_model = apply_qat(model, X_train, y_train, X_test, y_test, epochs=10)
+    
+    # Convert to TFLite (using QAT model for INT8)
+    tflite_sizes = convert_to_tflite(qat_model, X_train, 'har_cnn_tinyml')
     
     # Final size comparison
     if tflite_sizes:
@@ -450,7 +495,7 @@ def main():
             print(f"  TFLite (int8):      {tflite_sizes['int8']:.2f} KB")
             print(f"  Compression ratio:  {size_kb/tflite_sizes['int8']:.1f}x")
         print("=" * 60)
-        print("\n✓ INT8 model is ready for RISC-V deployment!")
+        print("\nINT8 model is ready for RISC-V deployment!")
     
     # Plot training history
     try:
@@ -460,7 +505,7 @@ def main():
         
         ax1.plot(history.history['accuracy'], label='Train Accuracy')
         ax1.plot(history.history['val_accuracy'], label='Val Accuracy')
-        ax1.set_title('Model Accuracy (TinyML CNN)')
+        ax1.set_title('Model Accuracy (TinyML CNN v2)')
         ax1.set_xlabel('Epoch')
         ax1.set_ylabel('Accuracy')
         ax1.legend()
@@ -468,7 +513,7 @@ def main():
         
         ax2.plot(history.history['loss'], label='Train Loss')
         ax2.plot(history.history['val_loss'], label='Val Loss')
-        ax2.set_title('Model Loss (TinyML CNN)')
+        ax2.set_title('Model Loss (TinyML CNN v2)')
         ax2.set_xlabel('Epoch')
         ax2.set_ylabel('Loss')
         ax2.legend()

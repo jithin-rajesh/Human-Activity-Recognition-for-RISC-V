@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Live HAR Demo</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    <style>
+        :root {
+            --bg-color: #0d1117;
+            --card-bg: #161b22;
+            --text-color: #c9d1d9;
+            --accent-color: #58a6ff;
+            --success-color: #238636;
+            --danger-color: #da3633;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+            box-sizing: border-box;
+            overflow-x: hidden;
+        }
+        .container {
+            width: 100%;
+            max-width: 400px;
+            background: var(--card-bg);
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 24px;
+            text-align: center;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+        }
+        h1 { margin-top: 0; font-size: 1.5rem; color: var(--accent-color); }
+        .status {
+            font-size: 0.9rem;
+            margin-bottom: 20px;
+            padding: 8px;
+            border-radius: 6px;
+            background: #21262d;
+        }
+        .connected { color: var(--success-color); }
+        .disconnected { color: var(--danger-color); }
+        
+        .activity-display {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin: 20px 0;
+            padding: 20px;
+            border-radius: 10px;
+            background: #21262d;
+            min-height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid var(--accent-color);
+        }
+        
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+            margin-top: 20px;
+        }
+        
+        button {
+            padding: 14px;
+            font-size: 1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        
+        #btn-permission { background-color: var(--accent-color); color: white; }
+        #btn-collect { background-color: var(--success-color); color: white; }
+        #btn-stop { background-color: var(--danger-color); color: white; }
+        
+        button:disabled { opacity: 0.3; cursor: not-allowed; }
+        
+        .hidden { display: none; }
+        
+        .sensor-data {
+            font-family: monospace;
+            font-size: 0.8rem;
+            text-align: left;
+            margin-top: 20px;
+            padding: 10px;
+            background: #0d1117;
+            border-radius: 4px;
+            color: #8b949e;
+        }
+        
+        .label-select {
+            padding: 10px;
+            background: #21262d;
+            border: 1px solid #30363d;
+            color: white;
+            border-radius: 6px;
+            width: 100%;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Live HAR Demo</h1>
+    <div id="status" class="status disconnected">Disconnected</div>
+    
+    <div id="setup-view">
+        <p>This demo requires motion sensor access.</p>
+        <button id="btn-permission">Enable Motion Sensors</button>
+    </div>
+    
+    <div id="active-view" class="hidden">
+        <div class="activity-display" id="prediction">IDLE</div>
+        
+        <div id="collection-controls">
+            <select id="label-select" class="label-select">
+                <option value="walking">Walking</option>
+                <option value="running">Running</option>
+                <option value="sitting">Sitting</option>
+                <option value="standing">Standing</option>
+            </select>
+            <button id="btn-collect">Start Collection</button>
+        </div>
+        
+        <button id="btn-stop" class="hidden">Stop</button>
+        
+        <div class="sensor-data">
+            Acc: <span id="acc-val">0, 0, 0</span><br>
+            Gyr: <span id="gyr-val">0, 0, 0</span>
+        </div>
+    </div>
+</div>
+
+<script>
+    const socket = io();
+    let isConnected = false;
+    let isCollecting = false;
+
+    const btnPermission = document.getElementById('btn-permission');
+    const btnCollect = document.getElementById('btn-collect');
+    const btnStop = document.getElementById('btn-stop');
+    const statusEl = document.getElementById('status');
+    const predictionEl = document.getElementById('prediction');
+    const labelSelect = document.getElementById('label-select');
+    const accEl = document.getElementById('acc-val');
+    const gyrEl = document.getElementById('gyr-val');
+
+    socket.on('connect', () => {
+        isConnected = true;
+        statusEl.innerText = 'Connected';
+        statusEl.className = 'status connected';
+    });
+
+    socket.on('disconnect', () => {
+        isConnected = false;
+        statusEl.innerText = 'Disconnected';
+        statusEl.className = 'status disconnected';
+    });
+
+    socket.on('prediction', (data) => {
+        if (!isCollecting) {
+            predictionEl.innerText = data.label.toUpperCase();
+            predictionEl.style.borderColor = '#58a6ff';
+        }
+    });
+
+    btnPermission.onclick = async () => {
+        if (typeof DeviceMotionEvent.requestPermission === 'function') {
+            try {
+                const permission = await DeviceMotionEvent.requestPermission();
+                if (permission === 'granted') {
+                    startSensors();
+                } else {
+                    alert('Permission denied');
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        } else {
+            startSensors();
+        }
+    };
+
+    function startSensors() {
+        document.getElementById('setup-view').classList.add('hidden');
+        document.getElementById('active-view').classList.remove('hidden');
+        
+        window.addEventListener('devicemotion', (event) => {
+            const acc = event.accelerationIncludingGravity;
+            const gyr = event.rotationRate;
+            
+            if (!acc || !gyr) return;
+
+            const data = {
+                ax: acc.x || 0,
+                ay: acc.y || 0,
+                az: acc.z || 0,
+                gx: gyr.alpha || 0,
+                gy: gyr.beta || 0,
+                gz: gyr.gamma || 0,
+                ts: Date.now()
+            };
+
+            accEl.innerText = `${data.ax.toFixed(2)}, ${data.ay.toFixed(2)}, ${data.az.toFixed(2)}`;
+            gyrEl.innerText = `${data.gx.toFixed(1)}, ${data.gy.toFixed(1)}, ${data.gz.toFixed(1)}`;
+
+            if (isConnected) {
+                socket.emit('sensor_data', {
+                    ...data,
+                    label: isCollecting ? labelSelect.value : null
+                });
+            }
+        });
+    }
+
+    btnCollect.onclick = () => {
+        isCollecting = true;
+        document.getElementById('collection-controls').classList.add('hidden');
+        btnStop.classList.remove('hidden');
+        predictionEl.innerText = `COLLECTING: ${labelSelect.value.toUpperCase()}`;
+        predictionEl.style.borderColor = '#238636';
+    };
+
+    btnStop.onclick = () => {
+        isCollecting = false;
+        document.getElementById('collection-controls').classList.remove('hidden');
+        btnStop.classList.add('hidden');
+        predictionEl.innerText = 'IDLE';
+        predictionEl.style.borderColor = '#58a6ff';
+    }
+</script>
+
+</body>
+</html>

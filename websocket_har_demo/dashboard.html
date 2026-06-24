@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HAR Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+        :root {
+            --bg: #0d1117;
+            --card: #161b22;
+            --border: #30363d;
+            --text: #c9d1d9;
+            --accent: #58a6ff;
+            --green: #3fb950;
+            --orange: #d29922;
+            --red: #f85149;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+        }
+        h1 { color: var(--accent); margin-bottom: 8px; font-size: 2rem; }
+        .subtitle { color: #8b949e; margin-bottom: 30px; }
+        .status { padding: 6px 14px; border-radius: 20px; font-size: 0.85rem; font-weight: 600; margin-bottom: 30px; }
+        .connected { background: rgba(63,185,80,0.15); color: var(--green); }
+        .disconnected { background: rgba(248,81,73,0.15); color: var(--red); }
+
+        .main-prediction {
+            font-size: 4rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            padding: 40px;
+            border-radius: 16px;
+            background: var(--card);
+            border: 3px solid var(--accent);
+            min-width: 400px;
+            text-align: center;
+            margin-bottom: 30px;
+            transition: all 0.3s ease;
+            letter-spacing: 2px;
+        }
+        .confidence-bar {
+            width: 100%;
+            max-width: 400px;
+            height: 8px;
+            background: var(--border);
+            border-radius: 4px;
+            margin-bottom: 30px;
+            overflow: hidden;
+        }
+        .confidence-fill {
+            height: 100%;
+            background: var(--accent);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+
+        .models-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            max-width: 500px;
+            width: 100%;
+        }
+        .model-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+        }
+        .model-card h3 { color: #8b949e; font-size: 0.85rem; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
+        .model-label { font-size: 1.5rem; font-weight: 800; margin-bottom: 6px; }
+        .model-conf { font-size: 0.9rem; color: #8b949e; }
+
+        .log {
+            margin-top: 30px;
+            max-width: 500px;
+            width: 100%;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: #8b949e;
+        }
+        .log-entry { padding: 4px 0; border-bottom: 1px solid #21262d; }
+        .log-entry:last-child { border-bottom: none; }
+    </style>
+</head>
+<body>
+    <h1>HAR Live Dashboard</h1>
+    <p class="subtitle">Real-time Human Activity Recognition</p>
+    <div id="status" class="status disconnected">⚡ Disconnected</div>
+
+    <div class="main-prediction" id="main-label">WAITING...</div>
+    <div class="confidence-bar"><div class="confidence-fill" id="conf-bar"></div></div>
+
+    <div class="models-grid">
+        <div class="model-card">
+            <h3>CNN Model</h3>
+            <div class="model-label" id="cnn-label">—</div>
+            <div class="model-conf" id="cnn-conf"></div>
+        </div>
+        <div class="model-card">
+            <h3>CNN-GRU Model</h3>
+            <div class="model-label" id="gru-label">—</div>
+            <div class="model-conf" id="gru-conf"></div>
+        </div>
+    </div>
+
+    <div class="log" id="log"></div>
+
+<script>
+    const socket = io();
+
+    socket.on('connect', () => {
+        document.getElementById('status').className = 'status connected';
+        document.getElementById('status').innerText = '🟢 Connected';
+        addLog('Connected to server');
+    });
+    socket.on('disconnect', () => {
+        document.getElementById('status').className = 'status disconnected';
+        document.getElementById('status').innerText = '⚡ Disconnected';
+        addLog('Disconnected');
+    });
+
+    socket.on('prediction', (data) => {
+        // Main prediction
+        document.getElementById('main-label').innerText = data.label.toUpperCase();
+        document.getElementById('conf-bar').style.width = (data.confidence * 100) + '%';
+
+        // Per-model results
+        if (data.models) {
+            if (data.models.cnn) {
+                document.getElementById('cnn-label').innerText = data.models.cnn.label.toUpperCase();
+                document.getElementById('cnn-conf').innerText = (data.models.cnn.confidence * 100).toFixed(0) + '%';
+            }
+            if (data.models.cnn_gru) {
+                document.getElementById('gru-label').innerText = data.models.cnn_gru.label.toUpperCase();
+                document.getElementById('gru-conf').innerText = (data.models.cnn_gru.confidence * 100).toFixed(0) + '%';
+            }
+        }
+
+        addLog(`${data.label} (${(data.confidence*100).toFixed(0)}%)`);
+    });
+
+    function addLog(msg) {
+        const log = document.getElementById('log');
+        const time = new Date().toLocaleTimeString();
+        log.innerHTML = `<div class="log-entry">${time} — ${msg}</div>` + log.innerHTML;
+        if (log.children.length > 50) log.removeChild(log.lastChild);
+    }
+</script>
+</body>
+</html>

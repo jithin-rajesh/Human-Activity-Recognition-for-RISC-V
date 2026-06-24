@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Human Activity Recognition on RISC-V</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <!-- Replaced Mermaid with Custom Inline CSS Anim -->
+</head>
+<body>
+    <div class="background-effects">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
+    <main class="dashboard">
+        <!-- Hero Header -->
+        <header class="header-section">
+            <div class="title-wrapper">
+                <h1 class="main-title">Continuous <span class="gradient-text">Human Activity Recognition</span><br>at the RISC-V Edge</h1>
+                <p class="subtitle">Showcasing end-to-end TinyML optimization: from hybrid CNN-GRU neural architectures to INT8 quantized CMSIS-NN executing on RISC-V vector extensions.</p>
+            </div>
+            <div class="badges-container">
+                <span class="header-badge orange">TFLite Micro</span>
+                <span class="header-badge blue">FastAPI</span>
+                <span class="header-badge cyan">RISC-V Vector (RVV)</span>
+            </div>
+        </header>
+
+        <div class="bento-grid">
+            
+            <!-- Mermaid Flow Diagram Card (Now the Hero) -->
+            <section class="bento-card card-flow">
+                <div class="card-content">
+                    <span class="badge green mb-1">Neural Architecture</span>
+                    <h2>CNN-GRU TinyML Flow</h2>
+                    <p>Our optimized architecture captures both spatial (CNN) and temporal (GRU) context while retaining an extremely small parameter size utilizing Global Average Pooling instead of massive Dense layers.</p>
+                    
+                    <div class="detailed-animation-stage">
+                        <div class="anim-row">
+                            <!-- Sensor Input -->
+                            <div class="arch-node">
+                                <div class="node-title">Raw Sensor Window<br><small>(128 time-steps × 6 channels)</small></div>
+                                <div class="tensor matrix-2d">
+                                    <div class="row r1"><span class="sig"></span></div>
+                                    <div class="row r2"><span class="sig"></span></div>
+                                    <div class="row r3"><span class="sig"></span></div>
+                                </div>
+                            </div>
+
+                            <div class="pipe">➔</div>
+
+                            <!-- 1D CNN ResNet -->
+                            <div class="arch-node">
+                                <div class="node-title">1D CNN ResNet<br><small>(Spatial Features)</small></div>
+                                <div class="tensor stack-3d">
+                                    <div class="plane plane-1"></div>
+                                    <div class="plane plane-2"></div>
+                                    <div class="plane plane-3"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="s-connector">
+                            <div class="s-top"></div>
+                            <div class="s-bot"></div>
+                        </div>
+
+                        <div class="anim-row">
+                            <!-- BiGRU -->
+                            <div class="arch-node">
+                                <div class="node-title">Bidirectional GRU<br><small>(Temporal Sequence)</small></div>
+                                <div class="tensor seq-unroll">
+                                    <div class="gru-cell g1">
+                                        <div class="arrow left"></div><div class="box">h<sub>t-1</sub></div><div class="arrow right"></div>
+                                    </div>
+                                    <div class="gru-cell g2">
+                                        <div class="arrow left"></div><div class="box">h<sub>t</sub></div><div class="arrow right"></div>
+                                    </div>
+                                    <div class="gru-cell g3">
+                                        <div class="arrow left"></div><div class="box">h<sub>t+1</sub></div><div class="arrow right"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="pipe">➔</div>
+
+                            <!-- Self-Attention & GAP -->
+                            <div class="arch-node">
+                                <div class="node-title">Attn & GAP Layer<br><small>(Context & Pooling)</small></div>
+                                <div class="attn-gap-container">
+                                    <div class="attention-heatmap">
+                                        <div class="cell hot"></div><div class="cell"></div><div class="cell warm"></div>
+                                        <div class="cell"></div><div class="cell hot"></div><div class="cell"></div>
+                                    </div>
+                                    <div class="gap-arrow">↓ GAP ↓</div>
+                                    <div class="gap-vector">
+                                        <div class="v"></div><div class="v"></div><div class="v"></div><div class="v"></div><div class="v"></div><div class="v"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="pipe">➔</div>
+                            
+                            <!-- Output Selection -->
+                            <div class="arch-node">
+                                <div class="node-title">Softmax Output<br><small>(Activity Class)</small></div>
+                                <div class="output-class pulse-text"><span id="activity-output" style="transition: opacity 0.5s ease; display: inline-block;">Walking</span></div>
+                            </div>
+                        </div>
+                        
+                        <script>
+                            document.addEventListener('DOMContentLoaded', () => {
+                                const activities = ["Walking", "Running", "Sitting", "Standing", "Climbing", "Laying Down"];
+                                const outNode = document.getElementById('activity-output');
+                                let idx = 0;
+                                setInterval(() => {
+                                    outNode.style.opacity = 0;
+                                    setTimeout(() => {
+                                        idx = (idx + 1) % activities.length;
+                                        outNode.textContent = activities[idx];
+                                        outNode.style.opacity = 1;
+                                    }, 500);
+                                }, 3000);
+                            });
+                        </script>
+                    </div>
+
+                    <style>
+                        .detailed-animation-stage {
+                            display: flex; flex-direction: column; align-items: center; justify-content: center;
+                            padding: 2.5rem 1rem; background: rgba(0,0,0,0.4);
+                            border-radius: 16px; border: 1px solid rgba(255,255,255,0.05);
+                            margin-top: 1.5rem; overflow: hidden; gap: 3rem;
+                        }
+                        .anim-row {
+                            display: flex; align-items: center; justify-content: center; gap: 1.5rem;
+                            width: 100%; flex-wrap: wrap;
+                        }
+                        .arch-node {
+                            display: flex; flex-direction: column; align-items: center; gap: 1rem; z-index: 2;
+                            flex-shrink: 0;
+                        }
+                        .node-title {
+                            font-size: 0.85rem; font-family: var(--font-mono); color: var(--primary-cyan); 
+                            text-align: center; letter-spacing: 0.5px; line-height: 1.2;
+                        }
+                        .node-title small { font-size: 0.7rem; color: var(--text-muted); display: block; margin-top: 4px; text-transform: uppercase;}
+                        
+                        .pipe {
+                            font-size: 1.5rem; color: rgba(255,255,255,0.3); font-weight: 300;
+                            animation: pulsePipe 2s infinite alternate; flex-shrink: 0;
+                            margin-top: 3.5rem; /* Aligns visually with the tensors instead of the title */
+                        }
+                        .s-connector {
+                            width: 40%; max-width: 400px;
+                            height: 60px;
+                            margin: -1.5rem auto; 
+                            position: relative;
+                            z-index: 1;
+                        }
+                        .s-top {
+                            position: absolute; right: 0; top: 0; bottom: 50%;
+                            width: calc(50% + 1px);
+                            border-right: 2px solid rgba(0,240,255,0.3);
+                            border-bottom: 2px solid rgba(0,240,255,0.3);
+                            border-bottom-right-radius: 16px;
+                            box-sizing: border-box;
+                        }
+                        .s-bot {
+                            position: absolute; left: 0; top: calc(50% - 2px); bottom: 0;
+                            width: calc(50% + 1px);
+                            border-top: 2px solid rgba(0,240,255,0.3);
+                            border-left: 2px solid rgba(0,240,255,0.3);
+                            border-top-left-radius: 16px;
+                            box-sizing: border-box;
+                        }
+                        @keyframes pulsePipe { to { color: var(--primary-blue); text-shadow: 0 0 10px var(--primary-blue); transform: scale(1.2); } }
+                        
+                        .tensor {
+                            display: flex; align-items: center; justify-content: center;
+                            background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);
+                            border-radius: 12px;
+                        }
+
+                        /* 1. Raw Sensor 2D Matrix */
+                        .matrix-2d {
+                            width: 80px; height: 60px; flex-direction: column; gap: 4px; padding: 5px;
+                            border-color: rgba(0, 240, 255, 0.3); position: relative; overflow: hidden;
+                        }
+                        .matrix-2d .row { width: 100%; height: 6px; background: rgba(0,0,0,0.5); border-radius: 3px; position: relative; overflow: hidden; }
+                        .matrix-2d .sig {
+                            position: absolute; top: 0; left: 0; height: 100%; width: 30px;
+                            background: var(--primary-cyan); opacity: 0.8; filter: blur(2px);
+                            animation: slideStream 1.5s infinite linear;
+                        }
+                        .r2 .sig { animation-delay: 0.3s; animation-duration: 2s; background: var(--primary-blue); }
+                        .r3 .sig { animation-delay: 0.6s; animation-duration: 1.2s; background: var(--primary-purple); }
+                        @keyframes slideStream { 0% { transform: translateX(-40px); } 100% { transform: translateX(90px); } }
+
+                        /* 2. 1D CNN stack-3d */
+                        .stack-3d {
+                            width: 80px; height: 80px; background: none; border: none;
+                            position: relative; perspective: 400px;
+                        }
+                        .plane {
+                            position: absolute; left: 10px; width: 60px; height: 60px; border-radius: 8px;
+                            transform-style: preserve-3d;
+                            animation: pulseStack 3s infinite ease-in-out;
+                        }
+                        .plane-1 { transform: rotateX(60deg) rotateZ(45deg) translateZ(-10px); background: rgba(0, 230, 118, 0.4); border: 1px solid var(--primary-green); z-index: 1; }
+                        .plane-2 { transform: rotateX(60deg) rotateZ(45deg) translateZ(5px); background: rgba(0, 240, 255, 0.4); border: 1px solid var(--primary-cyan); z-index: 2; animation-delay: 0.2s; }
+                        .plane-3 { transform: rotateX(60deg) rotateZ(45deg) translateZ(20px); background: rgba(182, 32, 224, 0.4); border: 1px solid var(--primary-purple); z-index: 3; animation-delay: 0.4s; }
+                        @keyframes pulseStack { 50% { filter: brightness(1.5); box-shadow: 0 0 15px currentColor; } }
+
+                        /* 3. GRU Sequence */
+                        .seq-unroll {
+                            padding: 10px; gap: 8px; border-color: rgba(182, 32, 224, 0.3);
+                        }
+                        .gru-cell { display: flex; flex-direction: column; align-items: center; }
+                        .gru-cell .box {
+                            width: 35px; height: 35px; background: rgba(182, 32, 224, 0.2); 
+                            border: 1px solid var(--primary-purple); border-radius: 8px;
+                            display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: 0.75rem;
+                            animation: gruCompute 2s infinite alternate; color: white;
+                        }
+                        .g1 .box { animation-delay: 0s; } .g2 .box { animation-delay: 0.5s; background: rgba(255, 106, 0, 0.2); border-color: var(--primary-orange); } .g3 .box { animation-delay: 1s; }
+                        @keyframes gruCompute { 100% { background: rgba(182, 32, 224, 0.6); transform: scale(1.05); } }
+                        .gru-cell .arrow { width: 30px; height: 2px; background: rgba(255,255,255,0.4); position: relative; margin: 4px 0; }
+                        .gru-cell .left::before, .gru-cell .right::after { content: ''; position: absolute; border: 4px solid transparent; }
+                        .gru-cell .left::before { border-right-color: rgba(255,255,255,0.8); left: -6px; top: -3px; }
+                        .gru-cell .right::after { border-left-color: rgba(255,255,255,0.8); right: -6px; top: -3px; }
+
+                        /* 4. Attention & GAP */
+                        .attn-gap-container {
+                            display: flex; flex-direction: column; align-items: center; gap: 8px;
+                            padding: 10px; border-radius: 12px; border: 1px solid rgba(255, 106, 0, 0.3);
+                            background: rgba(255, 106, 0, 0.05);
+                        }
+                        .attention-heatmap {
+                            display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px;
+                        }
+                        .attention-heatmap .cell {
+                            width: 25px; height: 25px; background: rgba(255,255,255,0.1); border-radius: 4px;
+                            animation: attnFlash 3s infinite;
+                        }
+                        .attention-heatmap .hot { background: var(--primary-orange); box-shadow: 0 0 10px var(--primary-orange); animation-delay: 0.4s; }
+                        .attention-heatmap .warm { background: rgba(255, 106, 0, 0.5); animation-delay: 1.2s; }
+                        @keyframes attnFlash { 50% { opacity: 0.3; } }
+                        .gap-arrow { font-size: 0.7rem; font-family: var(--font-mono); color: var(--text-muted); text-transform: uppercase; }
+                        .gap-vector {
+                            display: flex; gap: 2px;
+                        }
+                        .gap-vector .v { width: 12px; height: 12px; background: var(--primary-green); border-radius: 2px; opacity: 0.8; }
+
+                        /* 5. Output */
+                        .output-class {
+                            font-size: 1.3rem; font-weight: bold; color: var(--primary-pink); padding: 0.8rem 1.5rem;
+                            border: 1px solid rgba(255, 46, 147, 0.4); border-radius: 12px; background: rgba(255, 46, 147, 0.1);
+                            min-width: 180px; text-align: center; display: flex; justify-content: center;
+                        }
+                        .pulse-text { animation: pulseOutput 2s infinite; }
+                        @keyframes pulseOutput {
+                            0%, 100% { opacity: 1; box-shadow: 0 0 20px rgba(255, 46, 147, 0.5); text-shadow: 0 0 15px var(--primary-pink); transform: scale(1); }
+                            50% { opacity: 0.8; box-shadow: none; text-shadow: none; transform: scale(0.98); }
+                        }
+                        
+                        @media (max-width: 1024px) {
+                            .detailed-animation-stage { flex-direction: column; gap: 1rem; }
+                            .pipe { transform: rotate(90deg); }
+                        }
+                    </style>
+                </div>
+            </section>
+
+            <!-- Functions and Scripts (Code Card) -->
+            <section class="bento-card card-code">
+                <div class="card-content">
+                    <span class="badge purple mb-1">System Files</span>
+                    <h2>Core Scripts & Functions</h2>
+                    <p class="feature-desc">The backbone scripts powering the training and core logic.</p>
+                    
+                    <ul class="advanced-list">
+                        <li>
+                            <strong>train_cnn_gru_tinyml.py</strong> 
+                            <span>Implements CNN ResNet blocks + Bidirectional GRU + Self-Attention.</span>
+                        </li>
+                        <li>
+                            <strong>main.cc</strong> 
+                            <span>Compiles TFLM inference loop with physical optimized assembly kernels.</span>
+                        </li>
+                        <li>
+                            <strong>convert_phyphox.py</strong> 
+                            <span>Normalizes existing Phyphox CSV datasets into training formats.</span>
+                        </li>
+                        <li>
+                            <strong>analyze_data.py</strong> 
+                            <span>Validates Leave-Subject-Out (LOSO) cross-validation F1 Scores.</span>
+                        </li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- Stats Row -->
+            <section class="bento-card card-stat">
+                <div class="card-content centered">
+                    <div class="icon-wrap purple">✨</div>
+                    <div class="stat-number">12.5<span class="unit">KB</span></div>
+                    <h3>RAM Footprint</h3>
+                    <p>Total memory arena required for deployment.</p>
+                </div>
+            </section>
+            
+            <section class="bento-card card-stat">
+                <div class="card-content centered">
+                    <div class="icon-wrap green">⚡</div>
+                    <div class="stat-number">10x</div>
+                    <h3>Execution Speedup</h3>
+                    <p>44M &#8594; 4.47M instr. via CMSIS-NN extensions.</p>
+                </div>
+            </section>
+            
+            <section class="bento-card card-stat">
+                <div class="card-content centered">
+                    <div class="icon-wrap orange">🧠</div>
+                    <div class="stat-number">42k</div>
+                    <h3>Total Parameters</h3>
+                    <p>Down from ~1.5M in generic CNN architectures.</p>
+                </div>
+            </section>
+            
+            <section class="bento-card card-stat">
+                <div class="card-content centered">
+                    <div class="icon-wrap pink">🎯</div>
+                    <div class="stat-number">94<span class="unit">%</span></div>
+                    <h3>Model Accuracy</h3>
+                    <p>Maintained robustly post INT8 Quantization.</p>
+                </div>
+            </section>
+
+             <!-- Dataset Details Card -->
+            <section class="bento-card card-dataset">
+                <div class="card-content">
+                    <span class="badge cyan mb-1">Data Processing</span>
+                    <h2>Dataset & Normalization</h2>
+                    <p>Trained and validated on both the benchmark <strong>UCI HAR Dataset</strong> and real-world custom recordings.</p>
+                    <div class="dataset-grid">
+                        <div class="data-badge">Walking</div>
+                        <div class="data-badge">Upstairs</div>
+                        <div class="data-badge">Downstairs</div>
+                        <div class="data-badge">Sitting</div>
+                        <div class="data-badge">Standing</div>
+                        <div class="data-badge">Laying</div>
+                    </div>
+                    <p class="small-text mt-1" style="margin-top: 1.5rem;">Cross-validated using rigorous <strong>Leave-Subject-Out (LOSO)</strong> protocols to ensure generalizability to unseen test subjects.</p>
+                </div>
+            </section>
+
+            <!-- Hardware Instructions Deep Dive -->
+            <section class="bento-card card-hardware">
+                <div class="card-content row-layout">
+                    <div class="hardware-text">
+                        <span class="badge orange mb-1">Low-Level Optimization</span>
+                        <h2>RISC-V Vector Execution</h2>
+                        <p>We bypassed generic C++ reference kernels that map onto standard Add/Mul instructions which cause tiny INT8 accumulator overflows (an 18% accuracy divergence on simulators). Instead, we inject explicit Vector instructions handling rounding cleanly.</p>
+                    </div>
+                    <div class="hardware-code">
+                        <div class="code-window">
+                            <div class="window-header">
+                                <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+                                <span class="window-title">bash</span>
+                            </div>
+                            <pre class="mono-text"><code><span class="cmd">riscv-none-elf-gcc</span> -O3 \
+    <span class="arg">-march</span>=rv64gcv <span class="arg">-mabi</span>=lp64d \
+    <span class="arg">-DTF_LITE_USE_GLOBAL_CMATH_FUNCTIONS</span> \
+    main.cc model_data_uci.cc \
+    libtensorflow-microlite.a \
+    -o tinyml_sim_exec</code></pre>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </div>
+    </main>
+
+</body>
+</html>

@@ -1,0 +1,33 @@
+CNN LOSO CROSS-VALIDATION SUMMARY
+==================================================
+Generalization Accuracy: 64.94% (±8.36%)
+
+Architecture:
+  Conv1D(32, k=5) → BN → ReLU → MaxPool
+  Conv1D(64, k=5) → BN → ReLU → MaxPool
+  GlobalAvgPool → Dense(32) → Dropout → Softmax(8)
+
+No feature augmentation (raw 9-channel sensor data)
+
+Per-fold Accuracies:
+  Fold 1: 51.48%
+  Fold 2: 65.59%
+  Fold 3: 67.96%
+  Fold 4: 77.27%
+  Fold 5: 62.39%
+
+Aggregate Classification Report:
+               precision    recall  f1-score   support
+
+Climbing Down       0.57      0.57      0.57      2289
+  Climbing Up       0.43      0.59      0.50      2888
+      Jumping       0.80      0.87      0.83       568
+        Lying       0.73      0.83      0.77      3758
+      Running       0.75      0.84      0.79      4204
+      Sitting       0.48      0.42      0.45      3754
+     Standing       0.51      0.41      0.45      3709
+      Walking       0.71      0.54      0.61      3791
+
+     accuracy                           0.61     24961
+    macro avg       0.62      0.63      0.62     24961
+ weighted avg       0.61      0.61      0.61     24961
